@@ -78,32 +78,13 @@ public:
 		return m_Map[nodeId];
 	}
 
-	/**	@brief Gets the total triangles of a node.
-	*	@param[in] nodeId The identifier of the node.
-	*	@return	The total triangles of the node.*/
-	inline uint32_t		GetTotalTriangles( uint32_t nodeId ) const {
-		assert(nodeId<m_NumNodes);
-		return m_TotalTriangles[nodeId];
-	}
-
-	/**	@brief Gets the clustering coefficient of the graph.
-	 * 	@return The clustering coefficient.*/
-	inline double64_t 	GetCC() const {
-		return m_CC;
-	}
-
-	/** @brief Removes the edges that does not close any triangle, 
-		and computes the number of triangles, the triangle degree and the clustering coefficient
-		of each vertex.
-		@param numThreads The number of threads to use.
-		@return True if the removing was successful, false otherwise.*/
-	uint32_t		RemoveEdgesNoTriangles(uint32_t numThreads);
-
 	/** @brief Returns the map between internal identifiers to external ones. Used by some tools.
 	 *  @return The map vector.*/
 	inline const uint32_t* GetMap() const {
 		return m_Map;
 	}
+
+    uint32_t GetTotalTriangles(uint32_t nodeId) const;
 
 private:
 	uint32_t 		m_NumNodes; 		/**< @brief The number of nodes in the graph.*/
@@ -111,8 +92,6 @@ private:
 	Node* 			m_Nodes;			/**< @brief The array of nodes of the graph.*/
 	uint32_t* 		m_Adjacencies;		/**< @brief The array of adjacencies of the graph.*/
 	uint32_t* 		m_Map;				/**< @brief The map of internal identifiers to original identifiers.*/
-	uint32_t* 		m_TotalTriangles;	/**< @brief The number of triangles a node belongs to.*/
-	double64_t		m_CC;				/**< @brief The clustering coefficient of the graph.*/
 };
 
 }

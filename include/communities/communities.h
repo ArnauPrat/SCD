@@ -39,6 +39,10 @@ namespace scd {
 		double64_t*	m_NodeWCC;			/**< @brief The WCC of the nodes.*/
 		uint32_t	m_NumCommunities;	/**< @brief The number of communities.*/
 		uint32_t	m_NumNodes;			/**< @brief The number of nodes.*/
+        double64_t*  m_ConnectedInsert;
+        double64_t*  m_ConnectedRemove;
+        double64_t*  m_NotConnectedInsert;
+        double64_t*  m_NotConnectedRemove;
 		double64_t	m_WCC;				/**< @brief The WCC of this partition.*/
 	};
 

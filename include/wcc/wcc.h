@@ -53,7 +53,7 @@ namespace scd
 			 * 	@return The WCC of the node against the community.*/
 	double64_t 	ComputeWCC(const CGraph * graph, const double64_t alfa, uint32_t node, uint32_t communityLabel, const uint32_t * communities, uint32_t communitySize );
 
-	double64_t 	ComputeWCC(const CGraph * graph, const double64_t alfa, std::set<uint32_t>& community );
+//	double64_t 	ComputeWCC(const CGraph * graph, const double64_t alfa, std::set<uint32_t>& community );
 }
 
 #endif
