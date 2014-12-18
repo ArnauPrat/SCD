@@ -103,7 +103,6 @@ int main(int argc, char ** argv) {
     //==================== LOAD THE GRAPH ==================================
     printf("Graph: %s\n", graphFileName);
     graph.Load(graphFileName, numThreads);
-    graph.RemoveEdgesNoTriangles(numThreads);
     //======================================================================
 
     //=================== LOAD PARTITION ============================
