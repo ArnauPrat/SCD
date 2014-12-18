@@ -46,8 +46,7 @@ namespace scd {
 	m_NumEdges(0),
 	m_Nodes(NULL),
 	m_Adjacencies(NULL),
-	m_Map(NULL),
-	m_TotalTriangles(NULL)
+	m_Map(NULL)
 	{
 
 	}
@@ -67,11 +66,6 @@ namespace scd {
 		if( m_Map != NULL ) {
 			delete []  m_Map;
 			m_Map = NULL;
-		}
-		
-		if( m_TotalTriangles != NULL ) {
-			delete []  m_TotalTriangles;
-			m_TotalTriangles = NULL;
 		}
 	}
 
@@ -234,90 +228,33 @@ namespace scd {
 		uint64_t memNodes = (char*)&m_Nodes[m_NumNodes] - (char*)&m_Nodes[0];
 		uint64_t memEdges = (char*)&m_Adjacencies[m_NumEdges*2] - (char*)&m_Adjacencies[0];
 		uint64_t memMap   = (char*)&m_Map[m_NumNodes-1] - (char*)&m_Map[0];
-		uint64_t memTotalTriangles =  (char*)&m_TotalTriangles[m_NumNodes-1] - (char*)&m_TotalTriangles[0];
 		printf( "%-16s %-10lu Bytes\n", "Nodes:", memNodes );
 		printf( "%-16s %-10lu Bytes\n", "Adjacencies:", memEdges );
 		printf( "%-16s %-10lu Bytes\n", "Map:", memMap );
-		printf( "%-16s %-10lu Bytes\n", "TotalTriangles:", memTotalTriangles );
-		printf( "%-16s %-10lu Bytes\n", "Total:", memNodes + memEdges + memMap + memTotalTriangles );
+		printf( "%-16s %-10lu Bytes\n", "Total:", memNodes + memEdges + memMap );
 		printf( "..............\n" );
 		return 0;
 	}
 
 
-        static int compareInt (const void * a, const void * b)        
-        {
-            if ( *(int*)a >  *(int*)b ) return 1;
-            if ( *(int*)a <  *(int*)b ) return -1;
-            if ( *(int*)a == *(int*)b ) return 0;   
-        }
-        
-        
-	uint32_t	CGraph::RemoveEdgesNoTriangles( uint32_t numThreads) {
-		omp_set_num_threads(numThreads);
-		m_TotalTriangles = new uint32_t[m_NumNodes];
-		if( !m_TotalTriangles ) {
-			printf("Error allocating total triangles\n");
-			return 1;
-		}
-		m_CC = 0;
-		uint32_t numEdgesRemoved = 0;
-		uint32_t newAdjacencyIndex = 0;
-		uint32_t* edgesTriangles  = new uint32_t[m_NumEdges*2];
-                
-		#pragma omp parallel for schedule(dynamic, 32)
-		for(uint32_t i = 0; i < m_NumNodes; i++ ) {
-                        uint32_t edgesTrianglesIndex = m_Nodes[i].m_AdjacencyIndex;
-			m_TotalTriangles[i] = 0;			
-			uint32_t* adjacencyList1 = &m_Adjacencies[m_Nodes[i].m_AdjacencyIndex];
-			for(uint32_t j = 0; j < m_Nodes[i].m_Degree; j++) {
-				uint32_t* adjacencyList2 = &m_Adjacencies[m_Nodes[adjacencyList1[j]].m_AdjacencyIndex];
-				if( i < adjacencyList1[j]) { 
-					uint32_t triangles =  Intersect(adjacencyList1, m_Nodes[i].m_Degree, adjacencyList2, m_Nodes[adjacencyList1[j]].m_Degree);
-					edgesTriangles[edgesTrianglesIndex] = triangles;
-                                        
-                                        uint32_t k = (uint32_t*) bsearch(&i, adjacencyList2, 
-                                                       m_Nodes[adjacencyList1[j]].m_Degree, sizeof(uint32_t), compareInt)
-                                                     - adjacencyList2;                                        
-                                        assert(k !=  m_Nodes[adjacencyList1[j]].m_Degree); // "ERROR when computing triangles."                                        
-                                        edgesTriangles[m_Nodes[adjacencyList1[j]].m_AdjacencyIndex + k ] = triangles;
-				}
-				edgesTrianglesIndex++;
-			}
-		}
+    static int compareInt (const void * a, const void * b)        
+    {
+        if ( *(int*)a >  *(int*)b ) return 1;
+        if ( *(int*)a <  *(int*)b ) return -1;
+        if ( *(int*)a == *(int*)b ) return 0;   
+    }
 
-		uint32_t edgesTrianglesIndex = 0;
-		for(uint32_t i = 0; i < m_NumNodes; i++ ) {
-			m_TotalTriangles[i] = 0;
-			uint32_t  newDegree = 0;
-			uint32_t* tempAdjacencies = new uint32_t[m_Nodes[i].m_Degree];
-			uint32_t* adjacencyList1  = &m_Adjacencies[m_Nodes[i].m_AdjacencyIndex];
-			for(uint32_t j = 0; j < m_Nodes[i].m_Degree; j++) {
-				uint32_t triangles = edgesTriangles[edgesTrianglesIndex++];
-                                if( triangles > 0 ) {
-                                    tempAdjacencies[newDegree] = adjacencyList1[j];
-                                    newDegree++;
-                                } else {
-                                    numEdgesRemoved++;
-                                }
-                                m_TotalTriangles[i] += triangles;
-			}
-                        
-			memcpy(&m_Adjacencies[newAdjacencyIndex], tempAdjacencies, sizeof(uint32_t)*newDegree);
-			m_Nodes[i].m_Degree = newDegree;
-			m_Nodes[i].m_AdjacencyIndex = newAdjacencyIndex;
-			newAdjacencyIndex+=newDegree;
-			delete [] tempAdjacencies;
-			uint32_t auxPossibleTriangles = m_Nodes[i].m_Degree*(m_Nodes[i].m_Degree - 1);
-			if( auxPossibleTriangles > 0 ) {
-				m_CC += m_TotalTriangles[i] / (double64_t)auxPossibleTriangles;
-			}                        
-		}
-                
-                delete [] edgesTriangles;
-		m_CC /= m_NumNodes;
-//                std::cout << "m_cc inicial: " << m_CC << std::endl;
-		m_NumEdges-=(numEdgesRemoved/2);
-		return 0;
-	}
+    uint32_t CGraph::GetTotalTriangles(uint32_t nodeId) const {
+        uint32_t degree = GetDegree(nodeId);
+        const uint32_t* adjacencies = GetNeighbors(nodeId);
+        uint32_t totalTriangles = 0;
+        for(uint32_t i = 0; i < degree; ++i ) {
+            uint32_t neighbor = adjacencies[i];
+            uint32_t neighborDegree = GetDegree(neighbor);
+            const uint32_t* neighborAdjacencies = GetNeighbors(neighbor);
+            totalTriangles+=Intersect((uint32_t*)adjacencies,degree,(uint32_t*)neighborAdjacencies,neighborDegree);
+        }
+        return totalTriangles;
+    }
 }
+

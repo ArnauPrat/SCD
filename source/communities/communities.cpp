@@ -112,6 +112,10 @@ namespace scd {
         partition->m_ExternalEdges = NULL;
         partition->m_NodeWCC = NULL;
         partition->m_NumCommunities = 0;
+        partition->m_ConnectedInsert = NULL;
+        partition->m_ConnectedRemove = NULL;
+        partition->m_NotConnectedInsert = NULL;
+        partition->m_NotConnectedRemove = NULL;
         partition->m_WCC = 0;
 
         partition->m_NumNodes = graph->GetNumNodes();
@@ -147,6 +151,30 @@ namespace scd {
         partition->m_NodeWCC = new double64_t[graph->GetNumNodes()];
         if (!partition->m_NodeWCC) {
             printf("Error allocating node labels %u.\n", graph->GetNumNodes());
+            return 1;
+        }
+
+        partition->m_ConnectedInsert = new double64_t[graph->GetNumNodes()];
+        if (!partition->m_ConnectedInsert) {
+            printf("Error allocating connected insert.\n");
+            return 1;
+        }
+
+        partition->m_ConnectedRemove = new double64_t[graph->GetNumNodes()];
+        if (!partition->m_ConnectedRemove) {
+            printf("Error allocating connected insert.\n");
+            return 1;
+        }
+
+        partition->m_NotConnectedInsert = new double64_t[graph->GetNumNodes()];
+        if (!partition->m_NotConnectedInsert) {
+            printf("Error allocating connected insert.\n");
+            return 1;
+        }
+
+        partition->m_NotConnectedRemove = new double64_t[graph->GetNumNodes()];
+        if (!partition->m_NotConnectedRemove) {
+            printf("Error allocating connected insert.\n");
             return 1;
         }
 
@@ -228,6 +256,34 @@ namespace scd {
         }
 
         partition->m_WCC = ComputeWCC(graph, alfa, partition->m_NodeLabels, partition->m_NumCommunities, partition->m_CommunityIndices, partition->m_Communities, partition->m_NodeWCC);
+
+        for (uint32_t i = 0; i < graph->GetNumNodes(); i++) {
+            uint32_t communityLabel = partition->m_NodeLabels[i];
+            uint32_t degree = graph->GetDegree(i);
+            const uint32_t* adjacencies = graph->GetNeighbors(i);
+            uint32_t kin = 0;
+            for(uint32_t j = 0; j < degree; ++j){
+                uint32_t neighbor = adjacencies[j];
+                if( partition->m_NodeLabels[neighbor] == communityLabel ) kin++;
+            }
+            uint32_t r = partition->m_Communities[partition->m_CommunityIndices[communityLabel]];
+            double64_t denom = (double64_t)(degree+alfa*(r-kin-1));
+            partition->m_ConnectedInsert[i] = denom > 0.0 ? (kin+1) / denom : 0.0 ;
+            partition->m_ConnectedInsert[i]-=partition->m_NodeWCC[i];
+
+            denom = (double64_t)(degree+alfa*(r-1-kin));
+            partition->m_ConnectedRemove[i] = denom > 0.0 ? (kin-1) / denom : 0.0 ;
+            partition->m_ConnectedRemove[i] -= partition->m_NodeWCC[i];
+
+            denom = (degree+alfa*(r-kin));
+            partition->m_NotConnectedInsert[i] = denom > 0.0 ? kin / denom : 0.0;
+            partition->m_NotConnectedInsert[i] -= partition->m_NodeWCC[i];
+
+            denom = (degree+alfa*(r-1-1-kin));
+            partition->m_NotConnectedRemove[i] = denom > 0.0 ? kin / denom : 0.0;
+            partition->m_NotConnectedRemove[i] -= partition->m_NodeWCC[i];
+        }
+
         return 0;
     }
 
@@ -239,72 +295,91 @@ namespace scd {
       @param[in] p_in The probability that an edge inside of the community exists.
       @param[in] p_ext The probability that two edges leaving the community close a triangle.
       @param[in] alfa The alfa parameter controlling the cohesivness of the communities.*/
-    static double64_t CheckForIncrement(int32_t r, int32_t d_in, int32_t d_out, uint32_t c_out, double64_t p_in, double64_t p_ext, const double64_t alfa) {
-       /* double64_t t;
+    /*static double64_t CheckForIncrement(int32_t r, int32_t d_in, int32_t d_out, uint32_t c_out, double64_t p_in, const double64_t alfa) {
+        double64_t q;
         if (r > 0) {
-            t = (c_out - d_in) / (double64_t) r;
+            q = (c_out - d_in) / (double64_t) r;
         } else {
-            t = 0.0;
-        }
-        double64_t A = 0.0;
-        double64_t denom = 0.0;
-        denom = (d_in * (d_in - 1) * p_in + d_out * (d_out + d_in - 1) * p_ext);
-        if (denom != 0.0 && ((r + d_out) > 0)) {
-            A = ((d_in * (d_in - 1) * p_in) / denom) * (d_in + d_out) / (double64_t) (r + d_out);
-        }
-        double64_t BMinus = 0.0;
-        denom = (r - 1)*(r - 2) * p_in * p_in * p_in + (d_in - 1) * p_in + t * (r - 1) * p_in * p_ext + t * (t - 1) * p_ext + (d_out) * p_ext;
-        if (denom != 0.0 && ((r + t) > 0)) {
-            BMinus = (((d_in - 1) * p_in) / denom) * ((r - 1) * p_in + 1 + t) / (r + t);
-        }
-        double64_t CMinus = 0.0;
-        denom = (r - 1)*(r - 2) * p_in * p_in * p_in + t * (t - 1) * p_ext + t * (r - 1)*(p_in) * p_ext;
-        if (denom != 0.0 && ((r + t) > 0) && ((r - 1 + t) > 0)) {
-            CMinus = -(((r - 1)*(r - 2) * p_in * p_in * p_in) / denom) * ((r - 1) * p_in + t) / ((r + t)*(r - 1 + t));
-        }
-        return (A + d_in * BMinus + (r - d_in) * CMinus);
-        */
-
-        double64_t t;
-        if (r > 0) {
-            t = (c_out - d_in) / (double64_t) r;
-        } else {
-            t = 0.0;
+            q = 0.0;
         }
         // Node v 
         double64_t A = 0.0;
         double64_t denom = 0.0;
-        denom = (d_in * (d_in - 1) * p_in + 
-                d_out * (d_out - 1) * p_ext) +
-                d_out * d_in * p_ext;
-        denom *= d_in + d_out + alfa*(r-1-d_in);
+        denom = d_in+d_out +alfa*(r-d_in);
         if (denom != 0.0) {
-            A = ((d_in * (d_in - 1) * p_in) * (d_in + d_out)) / (denom);
+            A = d_in / (denom);
         }
 
         // Nodes connected with v 
         double64_t BMinus = 0.0;
-        denom = (r - 1)*(r - 2) * p_in * p_in * p_in + 
-                2*(d_in - 1) * p_in + 
-                t * (r - 1) * p_in * p_ext + 
-                t * (t - 1) * p_ext + 
-                (d_out) * p_ext;
-        denom *= (r-1)*p_in + 1 + t + alfa*(r - (r-1)*p_in - 1);
+        denom = alfa*p_in*r-alfa*p_in-alfa*r-p_in*r+alfa+p_in-q-1;
         if (denom != 0.0) {
-            BMinus = (2*(d_in - 1) * p_in) * ((r - 1) * p_in + 1 + t) / denom;
+            BMinus = -1 / denom;
         }
+
         // Nodes not connected with v 
         double64_t CMinus = 0.0;
-        denom = (r - 1)*(r - 2) * p_in * p_in * p_in +
-                t * (t - 1) * p_ext + 
-                t * (r - 1)*(p_in) * p_ext;
-        denom *= (r-1)*p_in + t + alfa*(r - (r-1)*p_in);
-        denom *= (r-1)*p_in + t + alfa*(r - (r-1)*p_in - 1);
-        if (denom != 0.0 && ((r + t) > 0) && ((r - 1 + t) > 0)) {
-            CMinus = -((r - 1)*(r - 2) * p_in * p_in * p_in) * ((r - 1) * p_in + t)*alfa / denom;
+        denom = ((alfa*p_in*r-alfa*p_in-alfa*r-p_in*r+p_in-q)*(alfa*p_in*r-alfa*p_in-alfa*r-p_in*r+alfa+p_in-q));
+        if( denom != 0.0 ) {
+            CMinus = -(r-1)*p_in*alfa/denom;
         }
         // Total 
-        return (A + d_in * BMinus + (r - d_in) * CMinus);
+        double64_t res = (A + d_in * BMinus + (r - d_in) * CMinus);
+        return res;
+    }*/
+
+    static double64_t CheckForIncrementInsert(const CGraph* graph, const CommunityPartition* partition, int node, int communityLabel, double64_t alfa) {
+        uint32_t degree = graph->GetDegree(node);
+        const uint32_t* adjacencies = graph->GetNeighbors(node);
+        double64_t res = 0.0;
+        std::set<uint32_t> neighborset;
+        for(uint32_t i = 0; i < degree; ++i) {
+            uint32_t neighbor = adjacencies[i];
+            neighborset.insert(neighbor);
+        }
+
+        uint32_t communitySize = partition->m_Communities[partition->m_CommunityIndices[communityLabel]];
+        const uint32_t* community = &partition->m_Communities[partition->m_CommunityIndices[communityLabel]+1];
+        uint32_t kin = 0;
+        for(uint32_t i = 0; i < communitySize; ++i) {
+            uint32_t member = community[i];
+            if(neighborset.find(member) != neighborset.end()) {
+                res+=partition->m_ConnectedInsert[member];
+                kin++;
+            } else {
+                res+=partition->m_NotConnectedInsert[member];
+            }
+        }
+        res+= kin/(double64_t)(degree+alfa*(communitySize-kin));
+        return res;
+    }
+
+    static double64_t CheckForIncrementRemove(const CGraph* graph, const CommunityPartition* partition, int node, int communityLabel, double64_t alfa) {
+        uint32_t degree = graph->GetDegree(node);
+        const uint32_t* adjacencies = graph->GetNeighbors(node);
+        double64_t res = 0.0;
+        std::set<uint32_t> neighborset;
+        for(uint32_t i = 0; i < degree; ++i) {
+            uint32_t neighbor = adjacencies[i];
+            neighborset.insert(neighbor);
+        }
+
+        uint32_t kin = 0;
+        uint32_t communitySize = partition->m_Communities[partition->m_CommunityIndices[communityLabel]];
+        const uint32_t* community = &partition->m_Communities[partition->m_CommunityIndices[communityLabel]+1];
+        for(uint32_t i = 0; i < communitySize; ++i) {
+            uint32_t member = community[i];
+            if( member != node ) {
+                if(neighborset.find(member) != neighborset.end()) {
+                    res+=partition->m_ConnectedRemove[member];
+                    kin++;
+                } else {
+                    res+=partition->m_NotConnectedRemove[member];
+                }
+            }
+        }
+        res-= partition->m_NodeWCC[node];
+        return res;
     }
 
     /** @brief Checks the best movement of a vertex.
@@ -324,13 +399,11 @@ namespace scd {
         uint32_t degree = graph->GetDegree(node);
         for (uint32_t i = 0; i < degree; i++) {
             uint32_t neighbor = adjacencies[i];
-            if (partition->m_Communities[partition->m_CommunityIndices[partition->m_NodeLabels[neighbor]]] > 1) {
-                std::map<uint32_t, uint32_t>::iterator it = neighborsCommunity.find(partition->m_NodeLabels[neighbor]);
-                if (it != neighborsCommunity.end()) {
-                    (*it).second++;
-                } else {
-                    neighborsCommunity.insert(std::pair<uint32_t, uint32_t>(partition->m_NodeLabels[neighbor], 1));
-                }
+            std::map<uint32_t, uint32_t>::iterator it = neighborsCommunity.find(partition->m_NodeLabels[neighbor]);
+            if (it != neighborsCommunity.end()) {
+                (*it).second++;
+            } else {
+                neighborsCommunity.insert(std::pair<uint32_t, uint32_t>(partition->m_NodeLabels[neighbor], 1));
             }
         }
 
@@ -346,12 +419,12 @@ namespace scd {
         } else {
             p_in = 0.0f;
         }
-        double64_t p_ext = graph->GetCC();
         double64_t bestRemoveImprovement;
-        bestRemoveImprovement = -CheckForIncrement(communitySize - 1, auxInternalEdges,
-                graph->GetDegree(node) - auxInternalEdges,
-                partition->m_ExternalEdges[community] + auxInternalEdges - (graph->GetDegree(node) - auxInternalEdges ),
-                p_in, p_ext, alfa);
+        //bestRemoveImprovement = -CheckForIncrement(communitySize - 1, auxInternalEdges,
+        //        graph->GetDegree(node) - auxInternalEdges,
+        //        partition->m_ExternalEdges[community] + auxInternalEdges - (graph->GetDegree(node) - auxInternalEdges ),
+        //        p_in, alfa);
+        bestRemoveImprovement = CheckForIncrementRemove(graph, partition, node,community,alfa);
         bestRemoveInternalEdges = auxInternalEdges;
         if (bestRemoveImprovement > 0.0f) {
             removeCommunity = true;
@@ -376,9 +449,11 @@ namespace scd {
                     p_in = 0.0;
                 }
 
-                double64_t p_ext          = graph->GetCC();
-                double64_t auxImprovement = CheckForIncrement(communitySize, auxInternalEdges, graph->GetDegree(node) - auxInternalEdges,
-                        partition->m_ExternalEdges[community], p_in, p_ext, alfa);
+                /*double64_t auxImprovement = CheckForIncrement(communitySize, auxInternalEdges, graph->GetDegree(node) - auxInternalEdges,
+                        partition->m_ExternalEdges[community], p_in, alfa);*/
+
+                double64_t auxImprovement = CheckForIncrementInsert(graph, partition, node, community,alfa);
+                bestRemoveInternalEdges = auxInternalEdges;
                 if (auxImprovement + bestRemoveImprovement > bestInsertImprovement) {
                     insertCommunity = true;
                     bestInsertImprovement = auxImprovement + bestRemoveImprovement;
@@ -472,173 +547,6 @@ namespace scd {
     }
 
 
-    /*********************** EXPERIMENTAL **************************************/
-
-    struct CommunityInteraction {
-        uint32_t m_CommunityId1;
-        uint32_t m_CommunityId2;
-        uint32_t degree;
-        double64_t m_Improvement;
-    };
-
-    static bool CompareByImprovement( const CommunityInteraction& a, const CommunityInteraction& b ) {
-        if( a.m_Improvement > b.m_Improvement ) return true;
-        return false;
-    }
-
-    static bool CompareById( const CommunityInteraction& a, const CommunityInteraction& b ) {
-        if( a.m_CommunityId1 < b.m_CommunityId1 ) return true;
-        if( a.m_CommunityId1 > b.m_CommunityId1 ) return false;
-        if( a.m_CommunityId2 < b.m_CommunityId2 ) return true;
-        if( a.m_CommunityId2 > b.m_CommunityId2 ) return false;
-        return false;
-    }
-
-    static void PrintCommunity(const CommunityPartition* partition, uint32_t communityId) {
-        const uint32_t* nodes = &partition->m_Communities[partition->m_CommunityIndices[communityId]+1];
-        uint32_t size = partition->m_Communities[partition->m_CommunityIndices[communityId]];
-        for( uint32_t i = 0; i < size; ++i ) {
-            printf("%d ", nodes[i]);
-        }
-        printf("\n");
-    }
-
-    double64_t TestMerge(const CGraph* graph, const CommunityPartition* partition, const double64_t alfa, const CommunityInteraction& interaction) {
-//        printf("Testing merge %d - %d\n", interaction.m_CommunityId1, interaction.m_CommunityId2);
-//        PrintCommunity(partition, interaction.m_CommunityId1);
-//        PrintCommunity(partition, interaction.m_CommunityId2);
-
-        std::set<uint32_t> community;
-        const uint32_t* nodes = &partition->m_Communities[partition->m_CommunityIndices[interaction.m_CommunityId1]+1];
-        uint32_t size = partition->m_Communities[partition->m_CommunityIndices[interaction.m_CommunityId1]];
-        double64_t before = 0.0;
-        for( uint32_t i = 0; i < size; ++i ) {
-            community.insert(nodes[i]);
-            before += partition->m_NodeWCC[nodes[i]];
-        }
-
-        nodes = &partition->m_Communities[partition->m_CommunityIndices[interaction.m_CommunityId2]+1];
-        size = partition->m_Communities[partition->m_CommunityIndices[interaction.m_CommunityId2]];
-        for( uint32_t i = 0; i < size; ++i ) {
-            community.insert(nodes[i]);
-            before += partition->m_NodeWCC[nodes[i]];
-        }
- /*       for( std::set<uint32_t>::iterator it = community.begin(); it != community.end(); ++it){
-            printf("%d ",*it);
-        }
-        printf("\n");*/
-        double64_t after = ComputeWCC(graph,alfa,community);
-//        printf("after: %f, before: %f\n", after, before);
-        return (after - before);
-    }
-
-
-    void ComputeDegree( const CGraph* graph, const CommunityPartition* partition, const double64_t alfa, CommunityInteraction& interaction) {
-        interaction.degree = 0;
-        uint32_t communitySize1 = partition->m_Communities[partition->m_CommunityIndices[interaction.m_CommunityId1]];
-        uint32_t communitySize2 = partition->m_Communities[partition->m_CommunityIndices[interaction.m_CommunityId2]];
-        uint32_t* community1 = &partition->m_Communities[partition->m_CommunityIndices[interaction.m_CommunityId1]+1];
-        uint32_t* community2 = &partition->m_Communities[partition->m_CommunityIndices[interaction.m_CommunityId2]+1];
-        for(int i = 0; i < communitySize1; ++i) {
-            uint32_t node = community1[i]; 
-            const uint32_t* adjacencies = graph->GetNeighbors(node); 
-            uint32_t degree = graph->GetDegree(node);
-            for( int j = 0; j < degree;++j){
-                uint32_t neighbor = adjacencies[j];
-                if( partition->m_NodeLabels[neighbor] == interaction.m_CommunityId2 ) {
-                    interaction.degree++;
-                }
-            }
-        }
-    }
-
-    double ShouldMerge( const CGraph* graph, const CommunityPartition* partition, const double64_t alfa, CommunityInteraction& interaction) {
-        ComputeDegree(graph,partition,alfa,interaction);
-        uint32_t communitySize1 = partition->m_Communities[partition->m_CommunityIndices[interaction.m_CommunityId1]];
-        uint32_t communitySize2 = partition->m_Communities[partition->m_CommunityIndices[interaction.m_CommunityId2]];
-        double64_t p_in1 = (2 * partition->m_InternalEdges[interaction.m_CommunityId1]) / ((double64_t) (communitySize1) * (communitySize1 - 1));
-        double64_t p_in2 = (2 * partition->m_InternalEdges[interaction.m_CommunityId2]) / ((double64_t) (communitySize2) * (communitySize2 - 1));
-        double64_t p_in = (p_in1*communitySize1 + p_in2*communitySize2) / (communitySize1+communitySize2);
-        //double64_t p_in = std::max(p_in1,p_in2);
-        double64_t p_out = interaction.degree / (double64_t)(communitySize1*communitySize2);
-        double64_t threshold = - (-alfa*p_out + sqrt(alfa*alfa*p_out*p_out-2*alfa*alfa*p_out-4*alfa*p_out*p_out+2*alfa*alfa+2*alfa*p_out+p_out*p_out)+p_out)*p_out / alfa*(p_out-1.0); 
-        //std::cout << p_in << " " << p_out << " " << threshold << std::endl;
-        return threshold - p_in;
-    }
-
-    typedef std::set<CommunityInteraction, bool (*)(const CommunityInteraction&, const CommunityInteraction&)> InteractionsSet;
-    static uint32_t MergeCommunities(const CGraph* graph, CommunityPartition* partition, const double64_t alfa) {
-        // Look for community interactions.
-        InteractionsSet candidateMerges(CompareById);
-        uint32_t N = graph->GetNumNodes();
-        for( uint32_t i = 0; i < N; ++i ) {
-            uint32_t communityLabel1 = partition->m_NodeLabels[i];
-            uint32_t degree = graph->GetDegree(i);
-            const uint32_t* adjacencies = graph->GetNeighbors(i);
-            for( uint32_t j = 0; j < degree; ++j ) {
-                uint32_t communityLabel2 = partition->m_NodeLabels[adjacencies[j]];
-                if( communityLabel1 != communityLabel2 ) {
-                    CommunityInteraction cI;
-                    cI.degree = 0;
-                    if( communityLabel1 < communityLabel2 ) {
-                        cI.m_CommunityId1 = communityLabel1;
-                        cI.m_CommunityId2 = communityLabel2;
-                    } else {
-                        cI.m_CommunityId2 = communityLabel1;
-                        cI.m_CommunityId1 = communityLabel2;
-                    }
-                    candidateMerges.insert(cI);
-                }
-            }
-        }
-        std::vector<CommunityInteraction> filteredInteractions;
-        uint32_t earlyFilter = 0;
-        // Test each community interaction and rank it.
-        for( InteractionsSet::iterator it = candidateMerges.begin(); it != candidateMerges.end(); ++it ) {
-            CommunityInteraction cI = *it;
-            if( partition->m_Communities[partition->m_CommunityIndices[cI.m_CommunityId1]] > 2 &&
-                    partition->m_Communities[partition->m_CommunityIndices[cI.m_CommunityId2]] > 2 ) {
-                if(ShouldMerge(graph, partition, alfa, cI) > 0.0 ) {
-                    earlyFilter++;
-                    double64_t improvement = TestMerge(graph, partition, alfa, cI);
-                    if( improvement > 0.0 ) {
-                        std::cout << cI.m_CommunityId1 << " " << cI.m_CommunityId2 << " " << improvement << std::endl;
-                        cI.m_Improvement = improvement;
-                        filteredInteractions.push_back(cI);
-                    }
-                }
-            }
-        } 
-        std::cout << earlyFilter << " " << filteredInteractions.size() << " " << candidateMerges.size() << std::endl;
-        // Sort community interactions by improvement.
-        uint32_t* tempNodeLabels = new uint32_t[partition->m_NumNodes];
-        memcpy(tempNodeLabels, partition->m_NodeLabels, sizeof(uint32_t)*partition->m_NumNodes);
-        std::sort(filteredInteractions.begin(), filteredInteractions.end(), CompareByImprovement);
-        std::set<uint32_t> touched;
-        uint32_t numInteractions = filteredInteractions.size();
-        for( uint32_t i = 0; i < numInteractions; ++i ) {
-            if( (touched.find(filteredInteractions[i].m_CommunityId1) == touched.end()) && 
-                    (touched.find(filteredInteractions[i].m_CommunityId2) == touched.end()) ) {
-                uint32_t communitySize = partition->m_Communities[partition->m_CommunityIndices[filteredInteractions[i].m_CommunityId1]];
-                const uint32_t* community = &partition->m_Communities[partition->m_CommunityIndices[filteredInteractions[i].m_CommunityId1]+1];
-                for( uint32_t j = 0; j < communitySize; ++j ) {
-                    tempNodeLabels[community[j]] = filteredInteractions[i].m_CommunityId2;
-                }
-                touched.insert(filteredInteractions[i].m_CommunityId1);
-                touched.insert(filteredInteractions[i].m_CommunityId2);
-            }
-        }
-
-        // Perform interactions constrained by independence and create a new labels array to create a partition from.
-        FreeResources(partition);
-        if (InitializeFromLabelsArray(graph, partition, tempNodeLabels, alfa)) {
-            printf("Error initializing from label array.\n");
-            return 1;
-        }
-        delete [] tempNodeLabels;
-        return 0;
-    }
-    /***************************************************************************/
 
     /** @brief Measures the memory consumption of a partition.
       @param partition The partition to measure.
@@ -700,6 +608,7 @@ namespace scd {
     }
 
     uint32_t InitializeSimplePartition(const CGraph* graph, CommunityPartition* partition, const double64_t alfa) {
+
         //Computing the clustering coefficient of each node of the graph.
         NodeClustering* nC = new NodeClustering[graph->GetNumNodes()];
         if (!nC) {
@@ -899,19 +808,6 @@ namespace scd {
                     remainingTries--;
                     improve = true;
                 }
-            }
-            printf("Trying to merge communities\n");
-            MergeCommunities(graph, partition, alfa);
-            printf("Merge: New WCC: %f\n", partition->m_WCC / graph->GetNumNodes());
-            printf("Merge: Best WCC: %f\n", bestPartition.m_WCC / graph->GetNumNodes());
-            if( partition->m_WCC - bestPartition.m_WCC > 0.0f ) {
-                printf("Merging communities improved the partition\n");
-            //    if (((partition->m_WCC - bestPartition.m_WCC) / bestPartition.m_WCC) > 0.01f) {
-                    remainingTries = lookahead;
-             //   }
-                FreeResources(&bestPartition);
-                CopyPartition(&bestPartition, partition);
-                improve = true;
             }
         }
 

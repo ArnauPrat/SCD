@@ -60,66 +60,23 @@ namespace scd {
     double64_t ComputeWCC(const CGraph * graph, const double64_t alfa, uint32_t node, uint32_t communityLabel, 
             const uint32_t * communities, uint32_t communitySize) {
         
-        uint32_t        internalTriangles      = 0;
-        uint32_t        internalTriangleDegree = 0;
-        uint32_t        triangleDegree         = 0;
-        uint32_t        node1                  = node;
-        const uint32_t* adjacencies1           = graph->GetNeighbors(node1);
-        uint32_t        degree1                = graph->GetDegree(node1);
+        uint32_t        kin         = 0;
+        const uint32_t* adjacencies           = graph->GetNeighbors(node);
+        uint32_t        degree                = graph->GetDegree(node);
         
-        if (communitySize <= 2 ||graph->GetTotalTriangles(node) == 0) {
-            return 0.0;
+        for (uint32_t k = 0; k < degree; k++) {
+            uint32_t        neighbor  = adjacencies[k];
+            if( communities[neighbor] == communityLabel ) kin++;
         }
         
-
-        //while(adjacencies1 < endList1){
-        for (uint32_t k = 0; k < degree1; k++) {
-            uint32_t        nodeId2  = adjacencies1[k];
-            uint32_t        degree2  = graph->GetDegree(nodeId2);                        
-            bool            internal = (communities[nodeId2] == communityLabel);
-            bool            internalTriangleFound = false;
-            bool            triangleFound         = false;
-            const uint32_t* adjacencies2          = graph->GetNeighbors(nodeId2);
-            
-            uint32_t*  currentNode1     = (uint32_t*) adjacencies1;
-            uint32_t*  currentNode2     = (uint32_t*) adjacencies2;
-            uint32_t*  endAdjacencies1  = (uint32_t*) adjacencies1 + degree1;
-            uint32_t*  endAdjacencies2  = (uint32_t*) adjacencies2 + degree2;
-            
-            while (currentNode1 != endAdjacencies1 && currentNode2 != endAdjacencies2){
-                if (*currentNode1 == *currentNode2){
-                    uint32_t sharedNeighbor = *currentNode1;
-                    if (internal && communities[sharedNeighbor] == communityLabel) {
-                        internalTriangleFound = true;
-                        internalTriangles++;
-                    }
-                    triangleFound = true;
-                    currentNode1++;
-                    currentNode2++;
-                }else  if(*currentNode1 < *currentNode2){
-                    while(*currentNode1 < *currentNode2 && currentNode1 < endAdjacencies1){
-                        currentNode1++;
-                    }
-                }else{
-                    while(*currentNode1 > *currentNode2 && currentNode2 < endAdjacencies2){
-                        currentNode2++;
-                    }
-                }
-            }
-            
-            if (internalTriangleFound) {
-                internalTriangleDegree++;
-            }
-            if (triangleFound) {
-                triangleDegree++;
-            }
+        double64_t res = 0.0;
+        if( degree > 0 ) {
+            res = kin / (double64_t)(degree + alfa*(communitySize - 1 - kin ));
         }
-        
-        return ((internalTriangles / (double64_t) graph->GetTotalTriangles(node)) *
-               (triangleDegree / (double64_t) (triangleDegree + alfa*(communitySize - 1 - internalTriangleDegree))));
+        return res;
     }
 
-    double64_t 	ComputeWCC(const CGraph * graph, const double64_t alfa, std::set<uint32_t>& community ){
+/*    double64_t 	ComputeWCC(const CGraph * graph, const double64_t alfa, std::set<uint32_t>& community ){
         double64_t WCC = 0.0;
         for( std::set<uint32_t>::iterator it = community.begin(); it != community.end(); ++it) {
             uint32_t nodeId1 = *it;
@@ -179,5 +136,6 @@ namespace scd {
         }
         return WCC;
     }
+    */
 }
 

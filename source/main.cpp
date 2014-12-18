@@ -134,16 +134,6 @@ int main(int argc, char ** argv) {
     //======================================================================
 
 
-    //================ REMOVE EDGES WITHOUT TRIANGLES ======================
-    initTime = StartClock();
-    printf("Removing edges without triangles ...\n");
-    graph.RemoveEdgesNoTriangles(numThreads);
-    spentTime = StopClock(initTime);
-    algorithmTime += spentTime;
-    totalTime += spentTime;
-    printf("Removing edges without triangles time: %lu ms\n", spentTime);
-    //======================================================================
-
 
     //=================== INITIALIZE PARTITION ============================
     initTime = StartClock();
